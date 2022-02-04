@@ -1,4 +1,4 @@
-#include <jd_IDLib.h>
+#include "jd_IDLib.h"
 
 /** The true ESP32 chip ID is essentially its MAC address.
  * This function provides an alternate chip ID that matches
@@ -49,10 +49,7 @@ bool getUniqueID(char *uniqID, int uniqIDMaxLen, const char *prefix_to_add)
         return false;
     }
 
-    // Copy prefix to uniqID
-    // strcpy(uniqID, prefix_to_add);
-    // use itoa() to convert the chip ID to a string and concatinate it to uniqID
-    // strcat(uniqID, itoa(ESP32_getChipId(), uniqID, 16));
+ 
     // sprintf the ESP32_getChipId() to a string and concatinate it to uniqID
 
     //   %[flags][width][.precision][length]specifier
