@@ -5,27 +5,16 @@
 
 #define ARDUINOTRACE_ENABLE true // Enable ArduinoTrace ((#define ARDUINOTRACE_ENABLE = true) = do trace,(#define ARDUINOTRACE_ENABLE = false) = don't trace)
 
-// Use from 0 to 4. Higher number, more debugging messages and memory usage.
-#define _ESPASYNC_WIFIMGR_LOGLEVEL_ 4
-
 #include <AsyncElegantOTA.h>
-
-// SSID & password are set on Setup
-const int MAXSSIDLEN = 32;          // Note this is 31 + null terminator
-char ssid[MAXSSIDLEN];              // Content can be changed
-const int MAXPASSLEN = 64;          // Note this is 63 + null terminator
-char esp_password[MAXPASSLEN];      // Content can be changed
-const char *SSID_PREFIX = "ESZ_";   // This format pointer means data CANNOT be changed
-const char *PASSWORD_PREFIX = "JD"; // This format pointer means data CANNOT be changed
-
-
 
 #if !(defined(ESP32))
 #error This code is intended to run on the ESP32 platform! Please check your Tools->Board setting.
 #endif
 #include <ESPAsync_WiFiManager.h>      //https://github.com/khoih-prog/ESPAsync_WiFiManager
-#include <ESPAsync_WiFiManager-Impl.h> //https://github.com/khoih-prog/ESPAsync_WiFiManager
-
+// #include <ESPAsync_WiFiManager-Impl.h> //https://github.com/khoih-prog/ESPAsync_WiFiManager
+// #include <ESPAsync_WiFiManager.hpp>
+// Use from 0 to 4. Higher number, more debugging messages and memory usage.
+#define _ESPASYNC_WIFIMGR_LOGLEVEL_ 4
 // From v1.0.10 to permit disable/enable StaticIP configuration in Config Portal from sketch. Valid only if DHCP is used.
 // You'll loose the feature of dynamically changing from DHCP to static IP, or vice versa
 // You have to explicitly specify false to disable the feature.
@@ -37,11 +26,39 @@ const char *PASSWORD_PREFIX = "JD"; // This format pointer means data CANNOT be 
 // DO NOT USE THE NTP here as it is setup separately later
 #define USE_ESP_WIFIMANAGER_NTP false
 
-//The OTA webserver is set up on this
+// The OTA webserver is set up on this
 AsyncWebServer webServer(80);
-
 DNSServer dnsServer;
 
+// MQTT stuff
+#include "jd_mqtt.h"
+const uint16_t mqttPort = 1883;
+IPAddress mqttServer(192, 168, 1, 3);
+const int MAXUSERLEN = 20;
+char mqttUser[MAXUSERLEN];
+const int MAXMQTTPASSLEN = 20;
+char mqttPassword[MAXMQTTPASSLEN];
+const int MAXMQTTIDLEN = 20;
+char mqttClientID[MAXMQTTIDLEN];
+const char *MQTT_USER_PREFIX = "ESP_"; // This format pointer means data CANNOT be changed
+const char *MQTT_PASSWORD_PREFIX = "JD_";
+const char *MQTT_CLIENT_PREFIX = "CL_";
+
+// WiFi SSID & password are set on Setup
+const int MAXSSIDLEN = 32;          // Note this is 31 + null terminator
+char ssid[MAXSSIDLEN];              // Content can be changed
+const int MAXPASSLEN = 64;          // Note this is 63 + null terminator
+char esp_password[MAXPASSLEN];      // Content can be changed
+const char *SSID_PREFIX = "ESZ_";   // This format pointer means data CANNOT be changed
+const char *PASSWORD_PREFIX = "JD"; // This format pointer means data CANNOT be changed
+
+void mqttCallback(char *topic, byte *payload, unsigned int length)
+{
+  // handle message arrived
+  TRACE()
+
+  DUMP(length);
+}
 
 void setupOTA()
 {
@@ -92,7 +109,7 @@ void setup()
     Serial.print(F("Connected. Local IP: "));
     Serial.println(WiFi.localIP());
 #endif
-blinkLED(ESP32_LED_BUILTIN, PIN_HIGH, false);
+    blinkLED(ESP32_LED_BUILTIN, PIN_HIGH, false);
   }
   else
   {
@@ -105,12 +122,28 @@ blinkLED(ESP32_LED_BUILTIN, PIN_HIGH, false);
   initNTPsetTimezone(MY_TIMEZONE, DEBUG); // Debug level can be set to NONE, ERROR, INFO, DEBUG
                                           // Set up ElegantOTA
   setupOTA();
+
+  // Set up MQTT
+  getUniqueID(mqttClientID, MAXMQTTIDLEN - 1, MQTT_CLIENT_PREFIX);
+  getUniqueID(mqttUser, MAXUSERLEN - 1, MQTT_USER_PREFIX);
+  getUniqueID(mqttPassword, MAXMQTTPASSLEN - 1, MQTT_PASSWORD_PREFIX);
+
+  initMQTT(mqttServer, mqttPort, mqttClientID, mqttUser, mqttPassword, mqttCallback);
 }
 
 void loop()
 {
-  TRACE();
+  int MAX_PAYLOAD_LEN = 100;
+  char payload[MAX_PAYLOAD_LEN];
+
   events(); // Allow EzTime to get to NTP server and update time as well as service time events
 
+  jd_getCurrentTime(payload, MAX_PAYLOAD_LEN - 1, ATOM);
+  Serial.println("Payload in main: ");
+  Serial.print(payload);
+
+  // strncpy(payload, "Hello World!", MAX_PAYLOAD_LEN - 1);
+  // Publish an MQTT message
+  publishMqtt("test/ESP32", payload);
   delay(10000);
 }

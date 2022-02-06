@@ -46,8 +46,8 @@ void initNTPsetTimezone(char *in_tz, ezDebugLevel_t debug_level)
 #else
   setDebug(NONE);
 #endif
-  setInterval(NTPSERVER_QUERY_INTERVAL_SECONDS); // Set the query to NTP server in seconds 
-  waitForSync();        // Wait for NTP time sync
+  setInterval(NTPSERVER_QUERY_INTERVAL_SECONDS); // Set the query to NTP server in seconds
+  waitForSync();                                 // Wait for NTP time sync
   // Provide official timezone names
   // https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
   myTZ.setLocation(in_tz);
@@ -55,4 +55,20 @@ void initNTPsetTimezone(char *in_tz, ezDebugLevel_t debug_level)
   // See https://github.com/ropg/ezTime#timezonedropnl
   delay(5000);
   testTime(); // Note that ARDUINOTRACE_ENABLE must be set to true in the sketch to see this output
+}
+
+void jd_getCurrentTime(char *out_time, int maxlen, String format)
+{
+
+  String tmp_time = myTZ.dateTime(format);
+  if (tmp_time.length() + 1 > maxlen)
+  {
+    tmp_time = tmp_time.substring(0, maxlen);
+  }
+  tmp_time.toCharArray(out_time, tmp_time.length() + 1);
+  Serial.println("Payload String in get: " + tmp_time);
+  Serial.println("Length: ");
+   Serial.print(tmp_time.length());
+  Serial.println("Payload char * in get: ");
+  Serial.print(out_time);
 }
