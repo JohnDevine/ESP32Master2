@@ -18,11 +18,17 @@ bool initMQTT( IPAddress ip, uint16_t port, const char *clientID,const char *use
     return result;
 
 }
-bool publishMqtt(const char *topic, const char *payload)
+bool publishMqtt(const char *topic_prefix, const char *topic, const char *payload)
 {
     TRACE();
+    char full_topic[MAX_TOPIC_LEN];
     bool result = false;
-    result = MQTTclient.publish(topic, payload);
+    if (strlen(topic) + strlen(topic_prefix) < MAX_TOPIC_LEN)
+    {
+        strcpy(full_topic, topic_prefix);
+        strcat(full_topic, topic);
+        result = MQTTclient.publish(full_topic, payload);
+    }    
     DUMP(result);
     return result;
 }

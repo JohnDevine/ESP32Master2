@@ -20,5 +20,5 @@ void testTime();
 //	ERROR,
 //	INFO,
 //	DEBUG
-void initNTPsetTimezone(char *in_tz, ezDebugLevel_t debug_level);
+void initNTPsetTimezone(ezDebugLevel_t debug_level);
 void jd_getCurrentTime(char *out_time, int maxlen, String format);

@@ -1,16 +1,16 @@
+#define ARDUINOTRACE_ENABLE true // Enable ArduinoTrace ((#define ARDUINOTRACE_ENABLE = true) = do trace,(#define ARDUINOTRACE_ENABLE = false) = don't trace)
+
 #include "jd_global.h"
 #include "jd_IDLib.h"
 #include "jd_LEDLib.h"
 #include <jd_timeFunctions.h>
-
-#define ARDUINOTRACE_ENABLE true // Enable ArduinoTrace ((#define ARDUINOTRACE_ENABLE = true) = do trace,(#define ARDUINOTRACE_ENABLE = false) = don't trace)
-
+#include <ArduinoJson.h>
 #include <AsyncElegantOTA.h>
 
 #if !(defined(ESP32))
 #error This code is intended to run on the ESP32 platform! Please check your Tools->Board setting.
 #endif
-#include <ESPAsync_WiFiManager.h>      //https://github.com/khoih-prog/ESPAsync_WiFiManager
+#include <ESPAsync_WiFiManager.h> //https://github.com/khoih-prog/ESPAsync_WiFiManager
 // #include <ESPAsync_WiFiManager-Impl.h> //https://github.com/khoih-prog/ESPAsync_WiFiManager
 // #include <ESPAsync_WiFiManager.hpp>
 // Use from 0 to 4. Higher number, more debugging messages and memory usage.
@@ -30,6 +30,10 @@
 AsyncWebServer webServer(80);
 DNSServer dnsServer;
 
+// JSON Stuff
+const int JSON_BUFFER_SIZE = 256; // Size is calculated from arduinojson.org/v6/assistant/
+const int MAX_PAYLOAD_LEN = 256;  // Maximum Length of the buffer we use to write to mqtt
+
 // MQTT stuff
 #include "jd_mqtt.h"
 const uint16_t mqttPort = 1883;
@@ -43,6 +47,9 @@ char mqttClientID[MAXMQTTIDLEN];
 const char *MQTT_USER_PREFIX = "ESP_"; // This format pointer means data CANNOT be changed
 const char *MQTT_PASSWORD_PREFIX = "JD_";
 const char *MQTT_CLIENT_PREFIX = "CL_";
+const char *MQTT_TOPIC_PREFIX = "JHD/BaanFarang/tele/SolarMobile/";
+const int MAX_DEVICE_ID_LEN = 20;
+char deviceID[MAX_DEVICE_ID_LEN];
 
 // WiFi SSID & password are set on Setup
 const int MAXSSIDLEN = 32;          // Note this is 31 + null terminator
@@ -51,6 +58,9 @@ const int MAXPASSLEN = 64;          // Note this is 63 + null terminator
 char esp_password[MAXPASSLEN];      // Content can be changed
 const char *SSID_PREFIX = "ESZ_";   // This format pointer means data CANNOT be changed
 const char *PASSWORD_PREFIX = "JD"; // This format pointer means data CANNOT be changed
+
+// Global Variables
+float calc_volts = 19.01;
 
 void mqttCallback(char *topic, byte *payload, unsigned int length)
 {
@@ -88,12 +98,13 @@ void setup()
   // Initialise the led pin as an output
   init_led(ESP32_LED_BUILTIN);
 
-  // Set the SSID & Password up
+  // Set the SSID. Password and deviceid up
   getUniqueID(ssid, MAXSSIDLEN - 1, SSID_PREFIX);
   getUniqueID(esp_password, MAXPASSLEN - 1, PASSWORD_PREFIX);
+  getUniqueID(deviceID, MAX_DEVICE_ID_LEN - 1, "");
 
-  // Create WiFiManager instance
-  ESPAsync_WiFiManager ESPAsync_wifiManager(&webServer, &dnsServer, "Async_AutoConnect");
+      // Create WiFiManager instance
+      ESPAsync_WiFiManager ESPAsync_wifiManager(&webServer, &dnsServer, "Async_AutoConnect");
   ///////
   // ESPAsync_wifiManager.startConfigPortal((const char *)ssid.c_str(), password.c_str());
   //////
@@ -119,7 +130,7 @@ void setup()
     blinkLED(ESP32_LED_BUILTIN, PIN_LOW, false);
   }
   // Set up time stuff
-  initNTPsetTimezone(MY_TIMEZONE, DEBUG); // Debug level can be set to NONE, ERROR, INFO, DEBUG
+  initNTPsetTimezone(DEBUG); // Debug level can be set to NONE, ERROR, INFO, DEBUG
                                           // Set up ElegantOTA
   setupOTA();
 
@@ -127,23 +138,36 @@ void setup()
   getUniqueID(mqttClientID, MAXMQTTIDLEN - 1, MQTT_CLIENT_PREFIX);
   getUniqueID(mqttUser, MAXUSERLEN - 1, MQTT_USER_PREFIX);
   getUniqueID(mqttPassword, MAXMQTTPASSLEN - 1, MQTT_PASSWORD_PREFIX);
+  getUniqueID(deviceID, MAX_DEVICE_ID_LEN - 1, "");
 
   initMQTT(mqttServer, mqttPort, mqttClientID, mqttUser, mqttPassword, mqttCallback);
 }
 
 void loop()
 {
-  int MAX_PAYLOAD_LEN = 100;
-  char payload[MAX_PAYLOAD_LEN];
+  char DateTime[30]; // Buffer to hold current data & time in ISO8601 format + 10
+  char output[MAX_PAYLOAD_LEN];
+
+  StaticJsonDocument<JSON_BUFFER_SIZE> doc;
 
   events(); // Allow EzTime to get to NTP server and update time as well as service time events
 
-  jd_getCurrentTime(payload, MAX_PAYLOAD_LEN - 1, ATOM);
-  Serial.println("Payload in main: ");
-  Serial.print(payload);
+  jd_getCurrentTime(DateTime, MAX_PAYLOAD_LEN - 1, ISO8601);
+
+// Create the JSON document
+  doc["Time"] = DateTime;
+  doc["DeviceId"] = deviceID;
+  JsonObject sensor_ADS1115 = doc["sensor"].createNestedObject("ADS1115");
+  sensor_ADS1115["Volts"] = calc_volts;
+  sensor_ADS1115["Amps"] = 12.34;
+  doc["ver"] = 1;
+
+  serializeJson(doc, output);
 
   // strncpy(payload, "Hello World!", MAX_PAYLOAD_LEN - 1);
   // Publish an MQTT message
-  publishMqtt("test/ESP32", payload);
+  publishMqtt(MQTT_TOPIC_PREFIX, "", output);
   delay(10000);
+  calc_volts = calc_volts + 0.01;
+
 }
